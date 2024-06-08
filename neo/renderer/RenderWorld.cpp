@@ -31,6 +31,7 @@ If you have questions concerning this license or the applicable additional terms
 #include "framework/DeclSkin.h"
 #include "renderer/GuiModel.h"
 #include "renderer/RenderWorld_local.h"
+#include "framework/UsercmdGen.h"
 
 #include "renderer/tr_local.h"
 
@@ -679,13 +680,21 @@ extern void R_SetupViewFrustum( viewDef_t* viewDef );
 extern void R_SetupProjection( viewDef_t * viewDef );
 void idRenderWorldLocal::RenderScene( const renderView_t *renderView ) {
 #ifndef	ID_DEDICATED
-	renderView_t	copy;
-
 	if ( !glConfig.isInitialized ) {
 		return;
 	}
 
-	copy = *renderView;
+	renderView_t renderViewCopy = *renderView;
+
+	idVec3 anglesDeltaFrame = *usercmdGen->GetViewanglesDeltaFrame();
+
+	if (anglesDeltaFrame.x != 0 || anglesDeltaFrame.y != 0)
+	{
+		idAngles newAngles = renderViewCopy.viewaxis.ToAngles();
+		newAngles.pitch -= anglesDeltaFrame.x;
+		newAngles.yaw -= anglesDeltaFrame.y;
+		renderViewCopy.viewaxis = newAngles.ToMat3();
+	}
 
 	// skip front end rendering work, which will result
 	// in only gui drawing
@@ -693,8 +702,8 @@ void idRenderWorldLocal::RenderScene( const renderView_t *renderView ) {
 		return;
 	}
 
-	if ( renderView->fov_x <= 0 || renderView->fov_y <= 0 ) {
-		common->Error( "idRenderWorld::RenderScene: bad FOVs: %f, %f", renderView->fov_x, renderView->fov_y );
+	if ( renderViewCopy.fov_x <= 0 || renderViewCopy.fov_y <= 0 ) {
+		common->Error( "idRenderWorld::RenderScene: bad FOVs: %f, %f", renderViewCopy.fov_x, renderViewCopy.fov_y );
 	}
 
 	// close any gui drawing
@@ -706,7 +715,7 @@ void idRenderWorldLocal::RenderScene( const renderView_t *renderView ) {
 	// setup view parms for the initial view
 	//
 	viewDef_t		*parms = (viewDef_t *)R_ClearedFrameAlloc( sizeof( *parms ) );
-	parms->renderView = *renderView;
+	parms->renderView = renderViewCopy;
 
 	if ( tr.takingScreenshot ) {
 		parms->renderView.forceUpdate = true;
@@ -725,7 +734,7 @@ void idRenderWorldLocal::RenderScene( const renderView_t *renderView ) {
 
 
 	parms->isSubview = false;
-	parms->initialViewAreaOrigin = renderView->vieworg;
+	parms->initialViewAreaOrigin = renderViewCopy.vieworg;
 	parms->floatTime = parms->renderView.time * 0.001f;
 	parms->renderWorld = this;
 
@@ -772,7 +781,7 @@ void idRenderWorldLocal::RenderScene( const renderView_t *renderView ) {
 
 	// save this world for use by some console commands
 	tr.primaryWorld = this;
-	tr.primaryRenderView = *renderView;
+	tr.primaryRenderView = renderViewCopy;
 	tr.primaryView = parms;
 
 	// rendering this view may cause other views to be rendered
@@ -784,7 +793,7 @@ void idRenderWorldLocal::RenderScene( const renderView_t *renderView ) {
 	// now write delete commands for any modified-but-not-visible entities, and
 	// add the renderView command to the demo
 	if ( session->writeDemo ) {
-		WriteRenderView( renderView );
+		WriteRenderView( &renderViewCopy );
 	}
 
 #if 0

@@ -2633,6 +2633,7 @@ idSessionLocal::Frame
 extern bool CheckOpenALDeviceAndRecoverIfNeeded();
 extern int g_screenshotFormat;
 void idSessionLocal::Frame() {
+	usercmdGen->PreFrame();
 
 	if ( com_asyncSound.GetInteger() == 0 ) {
 		soundSystem->AsyncUpdateWrite( Sys_Milliseconds() );
@@ -2713,6 +2714,9 @@ void idSessionLocal::Frame() {
 		minTic = latchedTicNumber;
 	}
 
+#if 1 // UncappedFPS
+	latchedTicNumber = com_ticNumber;
+#else
 	while( 1 ) {
 		latchedTicNumber = com_ticNumber;
 		if ( latchedTicNumber >= minTic ) {
@@ -2720,7 +2724,7 @@ void idSessionLocal::Frame() {
 		}
 		Sys_WaitForEvent( TRIGGER_EVENT_ONE );
 	}
-
+#endif
 	if ( authEmitTimeout ) {
 		// waiting for a game auth
 		if ( Sys_Milliseconds() > authEmitTimeout ) {
@@ -2837,6 +2841,8 @@ void idSessionLocal::Frame() {
 	int i;
 	for ( i = 0 ; i < gameTicsToRun ; i++ ) {
 		RunGameTic();
+		usercmdGen->PostTic();
+
 		if ( !mapSpawned ) {
 			// exited game play
 			break;

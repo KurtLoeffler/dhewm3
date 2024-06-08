@@ -343,6 +343,14 @@ public:
 
 	usercmd_t		GetDirectUsercmd( void );
 
+	virtual void PreFrame(void) override;
+	virtual void PostTic(void) override;
+	virtual idVec3* GetViewanglesDeltaFrame() override
+	{
+		return &viewanglesDeltaFrame;
+	}
+	idVec3 viewanglesDeltaFrame;
+
 private:
 	void			MakeCurrent( void );
 	void			InitCurrent( void );
@@ -385,8 +393,9 @@ private:
 	int				continuousMouseX, continuousMouseY;	// for gui event generatioin, never zerod
 	int				mouseButton;						// for gui event generatioin
 	bool			mouseDown;
-
+#if 0 // UncappedFPS
 	int				mouseDx, mouseDy;	// added to by mouse events
+#endif
 	float			joystickAxis[MAX_JOYSTICK_AXIS];	// set by joystick events
 
 	int				pollTime;
@@ -614,6 +623,7 @@ void idUsercmdGenLocal::KeyMove( void ) {
 	}
 }
 
+#if 0 // UncappedFPS
 /*
 =================
 idUsercmdGenLocal::MouseMove
@@ -707,6 +717,7 @@ void idUsercmdGenLocal::MouseMove( void ) {
 		cmd.forwardmove = idMath::ClampChar( (int)(cmd.forwardmove - strafeMy) );
 	}
 }
+#endif
 
 /*
 ========================
@@ -1027,6 +1038,7 @@ void idUsercmdGenLocal::MakeCurrent( void ) {
 		// get basic movement from keyboard
 		KeyMove();
 
+#if 0 // UncappedFPS
 		// get basic movement from mouse
 		MouseMove();
 
@@ -1036,9 +1048,12 @@ void idUsercmdGenLocal::MakeCurrent( void ) {
 		} else if ( oldAngles[PITCH] - viewangles[PITCH] > 90 ) {
 			viewangles[PITCH] = oldAngles[PITCH] - 90;
 		}
+#endif
 	} else {
+#if 0 // UncappedFPS
 		mouseDx = 0;
 		mouseDy = 0;
+#endif
 	}
 
 	for ( i = 0; i < 3; i++ ) {
@@ -1121,7 +1136,9 @@ void idUsercmdGenLocal::Clear( void ) {
 
 	inhibitCommands = false;
 
+#if 0 // UncappedFPS
 	mouseDx = mouseDy = 0;
+#endif
 	mouseButton = 0;
 	mouseDown = false;
 }
@@ -1224,6 +1241,7 @@ void idUsercmdGenLocal::Mouse( void ) {
 					Key( mouseButton, mouseDown );
 				} else {
 					switch ( action ) {
+#if 0 // UncappedFPS
 						case M_DELTAX:
 							mouseDx += value;
 							continuousMouseX += value;
@@ -1232,6 +1250,7 @@ void idUsercmdGenLocal::Mouse( void ) {
 							mouseDy += value;
 							continuousMouseY += value;
 							break;
+#endif
 						case M_DELTAZ:
 							int key = value < 0 ? K_MWHEELDOWN : K_MWHEELUP;
 							value = abs( value );
@@ -1350,6 +1369,66 @@ void idUsercmdGenLocal::MouseState( int *x, int *y, int *button, bool *down ) {
 	*button = mouseButton;
 	*down = mouseDown;
 }
+
+void idUsercmdGenLocal::PreFrame(void) {
+	int frameMouseDx = 0;
+	int frameMouseDy = 0;
+
+	int numEvents = Sys_PollMouseInputEvents();
+	for (int i = 0; i < numEvents; i++) {
+		int action, value;
+		if (Sys_ReturnMouseInputEvent(i, action, value)) {
+			switch (action) {
+			case M_DELTAX:
+				frameMouseDx += value;
+
+				// HACK: clear value so it doesn't get used next render frame.
+				value = 0;
+				break;
+			case M_DELTAY:
+				frameMouseDy += value;
+
+				// HACK: clear value so it doesn't get used next render frame.
+				value = 0;
+				break;
+			}
+		}
+	}
+
+	float mx = frameMouseDx*sensitivity.GetFloat();
+	float my = frameMouseDy*sensitivity.GetFloat();
+
+	if (m_showMouseRate.GetBool()) {
+		Sys_DebugPrintf("[%3i %3i  = %5.1f %5.1f] ", frameMouseDx, frameMouseDy, mx, my);
+	}
+
+	idVec3 oldAngles = viewangles;
+
+	if (!ButtonState(UB_STRAFE)) {
+		viewangles[YAW] -= m_yaw.GetFloat() * mx;
+	}
+
+	if (!ButtonState(UB_STRAFE) && (cmd.buttons & BUTTON_MLOOK)) {
+		viewangles[PITCH] += m_pitch.GetFloat() * my;
+	}
+
+	// check to make sure the angles haven't wrapped
+	if (viewangles[PITCH] - oldAngles[PITCH] > 90) {
+		viewangles[PITCH] = oldAngles[PITCH] + 90;
+	}
+	else if (oldAngles[PITCH] - viewangles[PITCH] > 90) {
+		viewangles[PITCH] = oldAngles[PITCH] - 90;
+	}
+
+	viewanglesDeltaFrame.x += idMath::AngleDelta(oldAngles.x, viewangles.x);
+	viewanglesDeltaFrame.y += idMath::AngleDelta(oldAngles.y, viewangles.y);
+	viewanglesDeltaFrame.z += idMath::AngleDelta(oldAngles.z, viewangles.z);
+}
+
+void idUsercmdGenLocal::PostTic(void) {
+	viewanglesDeltaFrame.Zero();
+}
+
 
 /*
 ================

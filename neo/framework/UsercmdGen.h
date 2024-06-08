@@ -163,6 +163,10 @@ public:
 
 	// Directly sample a usercmd.
 	virtual usercmd_t	GetDirectUsercmd( void ) = 0;
+
+	virtual void PreFrame(void) = 0;
+	virtual void PostTic(void) = 0;
+	virtual class idVec3* GetViewanglesDeltaFrame() = 0;
 };
 
 extern idUsercmdGen	*usercmdGen;
